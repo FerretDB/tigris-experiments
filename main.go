@@ -33,7 +33,7 @@ func main() {
 	err = dr.DropDatabase(ctx, dbName)
 	switch err := err.(type) {
 	case nil:
-		// do nothing
+		// if DB doesn't exist, do nothing
 	case *driver.Error:
 		if err.Code != api.Code_NOT_FOUND {
 			panic(err)
@@ -42,30 +42,23 @@ func main() {
 		panic(err)
 	}
 
+	// Create an empty DB
 	err = dr.CreateDatabase(ctx, dbName)
 	if err != nil {
 		panic(err)
 	}
 
+	// Create a collection with the given schema
 	colParams := map[string]any{
 		"title": "users",
 		"type":  "object",
 		"properties": map[string]any{
-			"$k": map[string]any{
-				"type": "array",
-				"items": map[string]any{
-					"type": "string",
-				},
-			},
-			"balance": map[string]any{
-				"type": "number",
-			},
 			"_id": map[string]any{
 				"type":   "string",
 				"format": "byte",
 			},
-			"name": map[string]any{
-				"type": "string",
+			"balance": map[string]any{
+				"type": "number",
 			},
 		},
 		"primary_key": []any{
@@ -81,14 +74,13 @@ func main() {
 		panic(err)
 	}
 
+	// Insert a doc into collection
 	id := ObjectID{0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
 	mid, err := json.Marshal(id[:])
-
 	if err != nil {
 		panic(err)
 	}
 	userB := map[string]any{
-		"name":    "Mister Infinity",
 		"balance": 1,
 		"_id":     mid,
 	}
@@ -98,26 +90,41 @@ func main() {
 	}
 
 	resp, err := dr.UseDatabase(dbName).Insert(ctx, colName, []driver.Document{res})
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%v", resp)
-
-	// that fails:
-	//filter, err := filter.Eq("_id", id[:]).Build()
-
-	// that works:
-	filter, err := filter.Eq("_id", mid).Build()
-
-	fmt.Printf("\n\n%v\n\n", string(filter))
+	fmt.Printf("inserted: %+v\n", resp)
 	if err != nil {
 		panic(err)
 	}
 
-	resp2, err := dr.UseDatabase(dbName).Delete(ctx, colName, filter)
-	//resp2, err := dr.UseDatabase(dbName).Read(ctx, colName, filter, nil)
+	// Update a doc with the given filter
+	filter, err := filter.Eq("_id", id[:]).Build()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%+v", resp2)
+
+	updateDoc := map[string]any{
+		"balance": 5,
+	}
+	updateQuery, err := json.Marshal(updateDoc)
+	if err != nil {
+		panic(err)
+	}
+	up, err := dr.UseDatabase(dbName).Update(ctx, colName, filter, updateQuery)
+	fmt.Printf("updated: %+v\n", up)
+	if err != nil {
+		panic(err)
+	}
+
+	// Find a doc using the same filter
+	found, err := dr.UseDatabase(dbName).Read(ctx, colName, filter, nil)
+	fmt.Printf("found: %+v\n", found)
+	if err != nil {
+		panic(err)
+	}
+
+	// Delete a doc using the same filter
+	del, err := dr.UseDatabase(dbName).Delete(ctx, colName, filter)
+	fmt.Printf("deleted: %+v\n", del)
+	if err != nil {
+		panic(err)
+	}
 }
