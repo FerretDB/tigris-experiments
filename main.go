@@ -2,115 +2,91 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"time"
+	"log"
+	"strings"
 
-	api "github.com/tigrisdata/tigris-client-go/api/server/v1"
 	"github.com/tigrisdata/tigris-client-go/config"
 	"github.com/tigrisdata/tigris-client-go/driver"
-	"github.com/tigrisdata/tigris-client-go/filter"
 )
 
-type ObjectID [12]byte
+func assert(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+func must[T any](v T, err error) T {
+	assert(err)
+	return v
+}
+
+func readIter(iter driver.Iterator) {
+	var d driver.Document
+	for iter.Next(&d) {
+		log.Printf("\t%s", d)
+	}
+	assert(iter.Err())
+	iter.Close()
+	log.Printf("\tDONE")
+}
 
 func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
-	cfg := &config.Driver{
-		URL: "localhost:8081",
-	}
-	dr, err := driver.NewDriver(ctx, cfg)
-	if err != nil {
-		panic(err)
-	}
+	conn := must(driver.NewDriver(ctx, &config.Driver{
+		URL: "127.0.0.1:8081",
+	}))
 
-	dbName := "hello"
-	colName := "users"
+	_ = conn.DropDatabase(ctx, "test")
+	assert(conn.CreateDatabase(ctx, "test"))
+	db := conn.UseDatabase("test")
 
-	// Cleanup DB before doing anything
-	err = dr.DropDatabase(ctx, dbName)
-	switch err := err.(type) {
-	case nil:
-		// if DB doesn't exist, do nothing
-	case *driver.Error:
-		if err.Code != api.Code_NOT_FOUND {
-			panic(err)
-		}
-	default:
-		panic(err)
-	}
-
-	// Create an empty DB
-	err = dr.CreateDatabase(ctx, dbName)
-	if err != nil {
-		panic(err)
-	}
-
-	// Create a collection with the given schema
-	colParams := []byte(`{
-		"title": "users",
-		"properties": {
-		  "balance": {
+	schema := driver.Schema(strings.TrimSpace(`
+{
+	"title": "users",
+	"properties": {
+		"balance": {
 			"type": "number"
-		  },
-		  "_id": {
-			"type": "string",
-			"format": "byte",
-			"autoGenerate": true
-		  }
 		},
-		"primary_key": [
-		  "_id"
-		]
-	}`)
-	err = dr.UseDatabase(dbName).CreateOrUpdateCollection(ctx, colName, colParams)
-	if err != nil {
-		panic(err)
-	}
-
-	// Insert a doc into collection
-	id := ObjectID{0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
-	user := map[string]any{
-		"balance": 1,
-		"_id":     id[:],
-	}
-	res, err := json.Marshal(user)
-	if err != nil {
-		panic(err)
-	}
-
-	resp, err := dr.UseDatabase(dbName).Insert(ctx, colName, []driver.Document{res})
-	fmt.Printf("inserted: %+v\n", resp)
-	if err != nil {
-		panic(err)
-	}
-
-	// Update a doc with the given filter
-	filter, err := filter.Eq("_id", id[:]).Build()
-	if err != nil {
-		panic(err)
-	}
-
-	updateQuery := []byte(`{"balance": 5}`)
-	up, err := dr.UseDatabase(dbName).Update(ctx, colName, filter, updateQuery)
-	fmt.Printf("updated: %+v\n", up)
-	if err != nil {
-		panic(err)
-	}
-
-	/*	// Find a doc using the same filter
-		found, err := dr.UseDatabase(dbName).Read(ctx, colName, filter, nil)
-		fmt.Printf("found: %+v\n", found)
-		if err != nil {
-			panic(err)
+		"_id": {
+			"type": "string",
+			"format": "byte"
 		}
+	},
+	"primary_key": ["_id"]
+}
+`))
+	assert(db.CreateOrUpdateCollection(ctx, "users", schema))
 
-		// Delete a doc using the same filter
-		del, err := dr.UseDatabase(dbName).Delete(ctx, colName, filter)
-		fmt.Printf("deleted: %+v\n", del)
-		if err != nil {
-			panic(err)
-		}*/
+	id := must(hex.DecodeString("62ea6a943d44b10e1b6b8797"))
+	base64ID := string(must(json.Marshal(id)))
+	// base64ID := `"` + base64.StdEncoding.EncodeToString(id) + `"`
+	filter := driver.Filter(fmt.Sprintf(`{"_id":%s}`, base64ID))
+	doc := driver.Document(fmt.Sprintf(`{"_id":%s, "balance":1}`, base64ID))
+
+	log.Printf("Inserting: %s", doc)
+	insertResp := must(db.Insert(ctx, "users", []driver.Document{doc}))
+	log.Printf("%s %s", insertResp.Status, insertResp.Keys[0])
+
+	log.Printf("Reading: %s", filter)
+	iter := must(db.Read(ctx, "users", filter, nil))
+	readIter(iter)
+
+	updateResp := must(db.Update(ctx, "users", filter, driver.Update(`{"$set": {"balance": 2}}`)))
+	log.Printf("%s %d", updateResp.Status, updateResp.ModifiedCount)
+
+	log.Printf("Reading after update: %s", filter)
+	iter = must(db.Read(ctx, "users", filter, nil))
+	readIter(iter)
+
+	log.Printf("Deleting: %s", filter)
+	deleteResp, err := db.Delete(ctx, "users", filter)
+	log.Printf("%v %s", deleteResp, err)
+
+	log.Printf("Reading after delete: %s", filter)
+	iter = must(db.Read(ctx, "users", filter, nil))
+	readIter(iter)
 }
