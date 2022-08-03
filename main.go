@@ -49,38 +49,34 @@ func main() {
 	}
 
 	// Create a collection with the given schema
-	colParams := map[string]any{
+	colParams := []byte(`{
 		"title": "users",
-		"type":  "object",
-		"properties": map[string]any{
-			"_id": map[string]any{
-				"type":   "string",
-				"format": "byte",
-			},
-			"balance": map[string]any{
-				"type": "number",
-			},
+		"properties": {
+		  "balance": {
+			"type": "number"
+		  },
+		  "_id": {
+			"type": "string",
+			"format": "byte",
+			"autoGenerate": true
+		  }
 		},
-		"primary_key": []any{
-			"_id",
-		},
-	}
-	cp, err := json.Marshal(colParams)
-	if err != nil {
-		panic(err)
-	}
-	err = dr.UseDatabase(dbName).CreateOrUpdateCollection(ctx, colName, cp)
+		"primary_key": [
+		  "_id"
+		]
+	}`)
+	err = dr.UseDatabase(dbName).CreateOrUpdateCollection(ctx, colName, colParams)
 	if err != nil {
 		panic(err)
 	}
 
 	// Insert a doc into collection
 	id := ObjectID{0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
-	userB := map[string]any{
+	user := map[string]any{
 		"balance": 1,
 		"_id":     id[:],
 	}
-	res, err := json.Marshal(userB)
+	res, err := json.Marshal(user)
 	if err != nil {
 		panic(err)
 	}
