@@ -76,13 +76,9 @@ func main() {
 
 	// Insert a doc into collection
 	id := ObjectID{0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
-	mid, err := json.Marshal(id[:])
-	if err != nil {
-		panic(err)
-	}
 	userB := map[string]any{
 		"balance": 1,
-		"_id":     mid,
+		"_id":     id[:],
 	}
 	res, err := json.Marshal(userB)
 	if err != nil {
@@ -101,30 +97,24 @@ func main() {
 		panic(err)
 	}
 
-	updateDoc := map[string]any{
-		"balance": 5,
-	}
-	updateQuery, err := json.Marshal(updateDoc)
-	if err != nil {
-		panic(err)
-	}
+	updateQuery := []byte(`{"balance": 5}`)
 	up, err := dr.UseDatabase(dbName).Update(ctx, colName, filter, updateQuery)
 	fmt.Printf("updated: %+v\n", up)
 	if err != nil {
 		panic(err)
 	}
 
-	// Find a doc using the same filter
-	found, err := dr.UseDatabase(dbName).Read(ctx, colName, filter, nil)
-	fmt.Printf("found: %+v\n", found)
-	if err != nil {
-		panic(err)
-	}
+	/*	// Find a doc using the same filter
+		found, err := dr.UseDatabase(dbName).Read(ctx, colName, filter, nil)
+		fmt.Printf("found: %+v\n", found)
+		if err != nil {
+			panic(err)
+		}
 
-	// Delete a doc using the same filter
-	del, err := dr.UseDatabase(dbName).Delete(ctx, colName, filter)
-	fmt.Printf("deleted: %+v\n", del)
-	if err != nil {
-		panic(err)
-	}
+		// Delete a doc using the same filter
+		del, err := dr.UseDatabase(dbName).Delete(ctx, colName, filter)
+		fmt.Printf("deleted: %+v\n", del)
+		if err != nil {
+			panic(err)
+		}*/
 }
