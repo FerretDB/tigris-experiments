@@ -26,10 +26,11 @@ func must[T any](v T, err error) T {
 func readIter(iter driver.Iterator) {
 	var d driver.Document
 	for iter.Next(&d) {
-		log.Printf("%s", d)
+		log.Printf("\t%s", d)
 	}
 	assert(iter.Err())
 	iter.Close()
+	log.Printf("\tDONE")
 }
 
 func main() {
@@ -60,7 +61,7 @@ func main() {
 `))
 	assert(db.CreateOrUpdateCollection(ctx, "users", schema))
 
-	id := must(hex.DecodeString(`feed` + `face` + `cafe` + `beef` + `badd` + `dead`))
+	id := must(hex.DecodeString("62ea6a943d44b10e1b6b8797"))
 	base64ID := base64.StdEncoding.EncodeToString(id)
 	filter := driver.Filter(fmt.Sprintf(`{"_id":%q}`, base64ID))
 	doc := driver.Document(fmt.Sprintf(`{"_id":%q, "balance":1}`, base64ID))
@@ -81,8 +82,8 @@ func main() {
 	readIter(iter)
 
 	log.Printf("Deleting: %s", filter)
-	deleteResp := must(db.Delete(ctx, "users", filter))
-	log.Printf("%s", deleteResp.Status)
+	deleteResp, err := db.Delete(ctx, "users", filter)
+	log.Printf("%v %s", deleteResp, err)
 
 	log.Printf("Reading after delete: %s", filter)
 	iter = must(db.Read(ctx, "users", filter, nil))
