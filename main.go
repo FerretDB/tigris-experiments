@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 
 	"github.com/tigrisdata/tigris-client-go/config"
@@ -49,7 +50,7 @@ func main() {
 	"title": "users",
 	"properties": {
 		"balance": {
-			"type": "number"
+			"type": "integer"
 		},
 		"_id": {
 			"type": "string",
@@ -65,7 +66,7 @@ func main() {
 	base64ID := string(must(json.Marshal(id)))
 	// base64ID := `"` + base64.StdEncoding.EncodeToString(id) + `"`
 	filter := driver.Filter(fmt.Sprintf(`{"_id":%s}`, base64ID))
-	doc := driver.Document(fmt.Sprintf(`{"_id":%s, "balance":1}`, base64ID))
+	doc := driver.Document(fmt.Sprintf(`{"_id":%s, "balance":%d}`, base64ID, int64(math.MinInt64)))
 
 	log.Printf("Inserting: %s", doc)
 	insertResp := must(db.Insert(ctx, "users", []driver.Document{doc}))
@@ -75,7 +76,8 @@ func main() {
 	iter := must(db.Read(ctx, "users", filter, nil))
 	readIter(iter)
 
-	updateResp := must(db.Update(ctx, "users", filter, driver.Update(`{"$set": {"balance": 2}}`)))
+	fields := driver.Update(fmt.Sprintf(`{"$set": {"balance": %d}}`, int64(math.MinInt64)))
+	updateResp := must(db.Update(ctx, "users", filter, fields))
 	log.Printf("%s %d", updateResp.Status, updateResp.ModifiedCount)
 
 	log.Printf("Reading after update: %s", filter)
