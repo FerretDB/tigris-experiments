@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -62,9 +62,10 @@ func main() {
 	assert(db.CreateOrUpdateCollection(ctx, "users", schema))
 
 	id := must(hex.DecodeString("62ea6a943d44b10e1b6b8797"))
-	base64ID := base64.StdEncoding.EncodeToString(id)
-	filter := driver.Filter(fmt.Sprintf(`{"_id":%q}`, base64ID))
-	doc := driver.Document(fmt.Sprintf(`{"_id":%q, "balance":1}`, base64ID))
+	base64ID := string(must(json.Marshal(id)))
+	// base64ID := `"` + base64.StdEncoding.EncodeToString(id) + `"`
+	filter := driver.Filter(fmt.Sprintf(`{"_id":%s}`, base64ID))
+	doc := driver.Document(fmt.Sprintf(`{"_id":%s, "balance":1}`, base64ID))
 
 	log.Printf("Inserting: %s", doc)
 	insertResp := must(db.Insert(ctx, "users", []driver.Document{doc}))
