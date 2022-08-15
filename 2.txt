@@ -1,9 +1,0 @@
-Inserting: {"_id":"YupqlD1EsQ4ba4eX", "balance":1}
-inserted {"_id":"YupqlD1EsQ4ba4eX"}
-Reading: {"_id":"YupqlD1EsQ4ba4eX"}
-{"_id":"YupqlD1EsQ4ba4eX", "balance":1}
-updated 1
-Reading after update: {"_id":"YupqlD1EsQ4ba4eX"}
-{"_id":"YupqlD1EsQ4ba4eX", "balance":2}
-Deleting: {"_id":"YupqlD1EsQ4ba4eX"}
-

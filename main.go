@@ -55,11 +55,8 @@ func main() {
 		"v": {
 			"type": "object",
 			"properties": {
-				"k": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					}
+				"hello": {
+					"type": "string"
 				}
 			}
 		}
@@ -72,7 +69,7 @@ func main() {
 	id := must(hex.DecodeString("62ea6a943d44b10e1b6b8797"))
 	base64ID := string(must(json.Marshal(id)))
 	filter := driver.Filter(fmt.Sprintf(`{"_id":%s}`, base64ID))
-	doc := driver.Document(fmt.Sprintf(`{"_id":%s, "v":{"k": ["hello"], "v":"foo"}, "foo": null}`, base64ID))
+	doc := driver.Document(fmt.Sprintf(`{"_id":%s, "v":{"hello": "world", "foo":"bar"}}`, base64ID))
 
 	log.Printf("Inserting: %s", doc)
 	insertResp := must(db.Insert(ctx, "users", []driver.Document{doc}))
@@ -84,7 +81,7 @@ func main() {
 
 	log.Printf("Describing collection: %s", filter)
 	descr := must(db.DescribeCollection(ctx, "users"))
-	log.Printf("Describe collection: %+v", descr)
+	log.Printf("Describe collection: %s", descr.Schema)
 
 	/*fields := driver.Update(fmt.Sprintf(`{"$set": {"balance": %d}}`, int64(math.MinInt64)))
 	updateResp := must(db.Update(ctx, "users", filter, fields))
