@@ -76,19 +76,11 @@ func main() {
 	iter := must(db.Read(ctx, "users", filter, nil))
 	readIter(iter)
 
-	fields := driver.Update(fmt.Sprintf(`{"$set": {"balance": %d}}`, int64(math.MinInt64)))
-	updateResp := must(db.Update(ctx, "users", filter, fields))
-	log.Printf("%s %d", updateResp.Status, updateResp.ModifiedCount)
+	res, err := conn.DescribeDatabase(ctx, "test")
+	assert(err)
 
-	log.Printf("Reading after update: %s", filter)
-	iter = must(db.Read(ctx, "users", filter, nil))
-	readIter(iter)
-
-	log.Printf("Deleting: %s", filter)
-	deleteResp, err := db.Delete(ctx, "users", filter)
-	log.Printf("%v %s", deleteResp, err)
-
-	log.Printf("Reading after delete: %s", filter)
-	iter = must(db.Read(ctx, "users", filter, nil))
-	readIter(iter)
+	log.Printf("Database %s size %d\n", res.Db, res.Size)
+	for _, collection := range res.Collections {
+		log.Printf("Collection %s size %d\n", collection.Collection, collection.Size)
+	}
 }
