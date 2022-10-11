@@ -92,4 +92,16 @@ func main() {
 	log.Printf("Reading after delete: %s", filter)
 	iter = must(db.Read(ctx, "users", filter, nil))
 	readIter(iter)
+
+	log.Printf("Describe collection: %s", doc)
+	describeResp, err := db.DescribeCollection(ctx, "users", nil)
+	log.Printf("%v %s", describeResp, err)
+
+	log.Printf("Drop collection: %s", doc)
+	err = db.DropCollection(ctx, "users", nil)
+	log.Printf("%s", err)
+
+	log.Printf("List collection: %s", doc)
+	listResp, err := db.ListCollections(ctx, nil)
+	log.Printf("%v %s", listResp, err)
 }
