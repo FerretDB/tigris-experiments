@@ -5,13 +5,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/tigrisdata/tigris-client-go/config"
+	"github.com/tigrisdata/tigris-client-go/driver"
 	"log"
 	"math"
 	"strings"
-
-	"github.com/tigrisdata/tigris-client-go/config"
-	"github.com/tigrisdata/tigris-client-go/driver"
 )
+
+// docker run -p8081:8081 tigrisdata/tigris-local:main
 
 func assert(err error) {
 	if err != nil {
