@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"log"
-	"math"
-	"strings"
-
 	"github.com/tigrisdata/tigris-client-go/config"
 	"github.com/tigrisdata/tigris-client-go/driver"
+	"log"
+	"strings"
+	"sync"
 )
 
 func assert(err error) {
@@ -42,53 +39,59 @@ func main() {
 	}))
 
 	_ = conn.DropDatabase(ctx, "test")
-	assert(conn.CreateDatabase(ctx, "test"))
-	db := conn.UseDatabase("test")
 
-	schema := driver.Schema(strings.TrimSpace(`
-{
-	"title": "users",
-	"properties": {
-		"balance": {
-			"type": "integer"
-		},
-		"_id": {
-			"type": "string",
-			"format": "byte"
-		}
-	},
-	"primary_key": ["_id"]
-}
-`))
-	assert(db.CreateOrUpdateCollection(ctx, "users", schema))
+	collNum := 10
 
-	id := must(hex.DecodeString("62ea6a943d44b10e1b6b8797"))
-	base64ID := string(must(json.Marshal(id)))
-	// base64ID := `"` + base64.StdEncoding.EncodeToString(id) + `"`
-	filter := driver.Filter(fmt.Sprintf(`{"_id":%s}`, base64ID))
-	doc := driver.Document(fmt.Sprintf(`{"_id":%s, "balance":%d}`, base64ID, int64(math.MinInt64)))
+	ready := make(chan struct{}, collNum)
+	start := make(chan struct{})
 
-	log.Printf("Inserting: %s", doc)
-	insertResp := must(db.Insert(ctx, "users", []driver.Document{doc}))
-	log.Printf("%s %s", insertResp.Status, insertResp.Keys[0])
+	var wg sync.WaitGroup
+	for i := 0; i < collNum; i++ {
+		wg.Add(1)
 
-	log.Printf("Reading: %s", filter)
-	iter := must(db.Read(ctx, "users", filter, nil))
-	readIter(iter)
+		go func(i int) {
+			defer wg.Done()
 
-	fields := driver.Update(fmt.Sprintf(`{"$set": {"balance": %d}}`, int64(math.MinInt64)))
-	updateResp := must(db.Update(ctx, "users", filter, fields))
-	log.Printf("%s %d", updateResp.Status, updateResp.ModifiedCount)
+			ready <- struct{}{}
 
-	log.Printf("Reading after update: %s", filter)
-	iter = must(db.Read(ctx, "users", filter, nil))
-	readIter(iter)
+			<-start
 
-	log.Printf("Deleting: %s", filter)
-	deleteResp, err := db.Delete(ctx, "users", filter)
-	log.Printf("%v %s", deleteResp, err)
+			dbname := "test"
+			conn.DescribeDatabase(ctx, dbname)
+			err := conn.CreateDatabase(ctx, dbname)
+			if err != nil {
+				if strings.Contains(err.Error(), "duplicate key value, violates key constraint") {
+					// Code = {api.Code} Code_UNKNOWN (2)
+					// Message = {string} "duplicate key value, violates key constraint"
+					panic(err)
+				}
+			}
 
-	log.Printf("Reading after delete: %s", filter)
-	iter = must(db.Read(ctx, "users", filter, nil))
-	readIter(iter)
+			collName := fmt.Sprintf("stress_%d", i)
+
+			conn.UseDatabase(dbname).DescribeCollection(ctx, collName)
+
+			schema := driver.Schema(strings.TrimSpace(fmt.Sprintf(`{
+				"title": "%s",
+				"description": "Create Collection Stress %d",
+				"primary_key": ["_id"],
+				"properties": {
+					"_id": {"type": "string"},
+					"v": {"type": "string"}
+				}
+			}`, collName, i,
+			)))
+
+			conn.UseDatabase(dbname).CreateOrUpdateCollection(ctx, collName, schema)
+		}(i)
+	}
+
+	for i := 0; i < collNum; i++ {
+		<-ready
+	}
+
+	close(start)
+
+	wg.Wait()
+
 }
