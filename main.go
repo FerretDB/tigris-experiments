@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
 	"log"
-	"math"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/tigrisdata/tigris-client-go/config"
 	"github.com/tigrisdata/tigris-client-go/driver"
@@ -24,16 +23,6 @@ func must[T any](v T, err error) T {
 	return v
 }
 
-func readIter(iter driver.Iterator) {
-	var d driver.Document
-	for iter.Next(&d) {
-		log.Printf("\t%s", d)
-	}
-	assert(iter.Err())
-	iter.Close()
-	log.Printf("\tDONE")
-}
-
 func main() {
 	ctx := context.Background()
 
@@ -45,50 +34,56 @@ func main() {
 	assert(conn.CreateDatabase(ctx, "test"))
 	db := conn.UseDatabase("test")
 
-	schema := driver.Schema(strings.TrimSpace(`
-{
-	"title": "users",
-	"properties": {
-		"balance": {
-			"type": "integer"
-		},
-		"_id": {
-			"type": "string",
-			"format": "byte"
-		}
-	},
-	"primary_key": ["_id"]
-}
-`))
-	assert(db.CreateOrUpdateCollection(ctx, "users", schema))
+	collNum := runtime.GOMAXPROCS(-1) * 10
 
-	id := must(hex.DecodeString("62ea6a943d44b10e1b6b8797"))
-	base64ID := string(must(json.Marshal(id)))
-	// base64ID := `"` + base64.StdEncoding.EncodeToString(id) + `"`
-	filter := driver.Filter(fmt.Sprintf(`{"_id":%s}`, base64ID))
-	doc := driver.Document(fmt.Sprintf(`{"_id":%s, "balance":%d}`, base64ID, int64(math.MinInt64)))
+	ready := make(chan struct{}, collNum)
+	start := make(chan struct{})
 
-	log.Printf("Inserting: %s", doc)
-	insertResp := must(db.Insert(ctx, "users", []driver.Document{doc}))
-	log.Printf("%s %s", insertResp.Status, insertResp.Keys[0])
+	var created atomic.Int32 // number of successful attempts to create a collection
+	var wg sync.WaitGroup
+	for i := 0; i < collNum; i++ {
+		wg.Add(1)
 
-	log.Printf("Reading: %s", filter)
-	iter := must(db.Read(ctx, "users", filter, nil))
-	readIter(iter)
+		go func(i int) {
+			defer wg.Done()
 
-	fields := driver.Update(fmt.Sprintf(`{"$set": {"balance": %d}}`, int64(math.MinInt64)))
-	updateResp := must(db.Update(ctx, "users", filter, fields))
-	log.Printf("%s %d", updateResp.Status, updateResp.ModifiedCount)
+			ready <- struct{}{}
 
-	log.Printf("Reading after update: %s", filter)
-	iter = must(db.Read(ctx, "users", filter, nil))
-	readIter(iter)
+			<-start
 
-	log.Printf("Deleting: %s", filter)
-	deleteResp, err := db.Delete(ctx, "users", filter)
-	log.Printf("%v %s", deleteResp, err)
+			schema := driver.Schema(strings.TrimSpace(`
+			{
+				"title": "users",
+				"properties": {
+					"balance": {
+						"type": "integer"
+					},
+					"_id": {
+						"type": "string",
+						"format": "byte"
+					}
+				},
+				"primary_key": ["_id"]
+			}
+			`))
+			err := db.CreateOrUpdateCollection(ctx, "users", schema)
 
-	log.Printf("Reading after delete: %s", filter)
-	iter = must(db.Read(ctx, "users", filter, nil))
-	readIter(iter)
+			if err == nil {
+				created.Add(1)
+				log.Printf("iteration %d, success\n", i)
+			} else {
+				log.Printf("iteration %d, error: %v\n", i, err)
+			}
+		}(i)
+	}
+
+	for i := 0; i < collNum; i++ {
+		<-ready
+	}
+
+	close(start)
+
+	wg.Wait()
+
+	log.Printf("Successfully created: %d\n\n", created.Load())
 }
