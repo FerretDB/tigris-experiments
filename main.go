@@ -41,8 +41,9 @@ func main() {
 		URL: "127.0.0.1:8081",
 	}))
 
-	_ = conn.DropDatabase(ctx, "test")
-	assert(conn.CreateDatabase(ctx, "test"))
+	_, _ = conn.DeleteProject(ctx, "test")
+	_, err := conn.CreateProject(ctx, "test")
+	assert(err)
 	db := conn.UseDatabase("test")
 
 	schema := driver.Schema(strings.TrimSpace(`
