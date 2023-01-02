@@ -2,11 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
 	"log"
-	"math"
 	"strings"
 
 	"github.com/tigrisdata/tigris-client-go/config"
@@ -47,27 +43,19 @@ func main() {
 	db := conn.UseDatabase("test")
 
 	schema := driver.Schema(strings.TrimSpace(`
-{
-	"title": "users",
-	"properties": {
-		"balance": {
-			"type": "integer"
-		},
-		"_id": {
-			"type": "string",
-			"format": "byte"
+	{
+		"title": "users",
+		"primary_key": ["_id"],
+		"properties": {
+			"v": {"type": "integer", "format": "int64"},
+			"_id": {"type": "string"}
 		}
-	},
-	"primary_key": ["_id"]
-}
+	}
 `))
 	assert(db.CreateOrUpdateCollection(ctx, "users", schema))
 
-	id := must(hex.DecodeString("62ea6a943d44b10e1b6b8797"))
-	base64ID := string(must(json.Marshal(id)))
-	// base64ID := `"` + base64.StdEncoding.EncodeToString(id) + `"`
-	filter := driver.Filter(fmt.Sprintf(`{"_id":%s}`, base64ID))
-	doc := driver.Document(fmt.Sprintf(`{"_id":%s, "balance":%d}`, base64ID, int64(math.MinInt64)))
+	filter := driver.Filter(`{"_id":"int64"}`)
+	doc := driver.Document(`{"_id":"int64","v":42}`)
 
 	log.Printf("Inserting: %s", doc)
 	insertResp := must(db.Insert(ctx, "users", []driver.Document{doc}))
@@ -77,19 +65,11 @@ func main() {
 	iter := must(db.Read(ctx, "users", filter, nil))
 	readIter(iter)
 
-	fields := driver.Update(fmt.Sprintf(`{"$set": {"balance": %d}}`, int64(math.MinInt64)))
-	updateResp := must(db.Update(ctx, "users", filter, fields))
-	log.Printf("%s %d", updateResp.Status, updateResp.ModifiedCount)
+	replace := driver.Document(`{"_id":"int64","v":[]}`)
+	updateResp := must(db.Replace(ctx, "users", []driver.Document{replace})) // Internal server error
+	log.Printf("%s %d", updateResp.Status, updateResp.Metadata)
 
 	log.Printf("Reading after update: %s", filter)
-	iter = must(db.Read(ctx, "users", filter, nil))
-	readIter(iter)
-
-	log.Printf("Deleting: %s", filter)
-	deleteResp, err := db.Delete(ctx, "users", filter)
-	log.Printf("%v %s", deleteResp, err)
-
-	log.Printf("Reading after delete: %s", filter)
 	iter = must(db.Read(ctx, "users", filter, nil))
 	readIter(iter)
 }
