@@ -67,7 +67,7 @@ func main() {
 	base64ID := string(must(json.Marshal(id)))
 	// base64ID := `"` + base64.StdEncoding.EncodeToString(id) + `"`
 	filter := driver.Filter(fmt.Sprintf(`{"_id":%s}`, base64ID))
-	doc := driver.Document(fmt.Sprintf(`{"_id":%s, "balance":%d}`, base64ID, int64(math.MinInt64)))
+	doc := driver.Document(fmt.Sprintf(`{"_id":%s, "balance":%d}`, base64ID, int64(math.MaxInt64)))
 
 	log.Printf("Inserting: %s", doc)
 	insertResp := must(db.Insert(ctx, "users", []driver.Document{doc}))
@@ -77,7 +77,7 @@ func main() {
 	iter := must(db.Read(ctx, "users", filter, nil))
 	readIter(iter)
 
-	fields := driver.Update(fmt.Sprintf(`{"$set": {"balance": %d}}`, int64(math.MinInt64)))
+	fields := driver.Update(fmt.Sprintf(`{"$set": {"balance": %d}}`, int64(math.MaxInt64)))
 	updateResp := must(db.Update(ctx, "users", filter, fields))
 	log.Printf("%s %d", updateResp.Status, updateResp.ModifiedCount)
 
